@@ -1,14 +1,19 @@
 import com.jayway.restassured.RestAssured;
+import converter.ConvertCurrency;
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.unit.TestContext;
 import io.vertx.ext.unit.junit.VertxUnitRunner;
+import io.vertx.ext.web.RoutingContext;
+import org.apache.commons.lang3.Conversion;
 import org.junit.*;
 import org.junit.runner.RunWith;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.ServerSocket;
+import java.util.Currency;
 
 import static com.jayway.restassured.RestAssured.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -37,7 +42,6 @@ public class TestMoneyTransfer {
         RestAssured.baseURI = "http://localhost";
         RestAssured.port = 8080;
     }
-
     @Test
     public void healthCheck(TestContext context) {
         String healthCheck = get("/health").asString();
@@ -93,13 +97,6 @@ public class TestMoneyTransfer {
     }
 
     @Test
-    public void accountDeposit_AccountNumbernDoesNotExist() {
-        put("/accounts/2/deposit/1000").then()
-            .assertThat()
-            .statusCode(404);
-    }
-
-    @Test
     public void accountDeposit() {
         put("/accounts/1/deposit/1000").then()
             .assertThat()
@@ -131,8 +128,8 @@ public class TestMoneyTransfer {
     @Test
     public void addNewAccount() {
         given().body("{\n" +
-            "  \"id\": 4,\n" +
-            "  \"name\": \"Bastien Monnet\",\n" +
+            "  \"id\": 444,\n" +
+            "  \"name\": \"Julian Vasa\",\n" +
             "  \"balance\": 500.2,\n" +
             "  \"currency\": \"EUR\"\n" +
             "}")
@@ -154,7 +151,7 @@ public class TestMoneyTransfer {
     public void addNewAccount_AccountNumberAlreadyExists() {
         given().body("{\n" +
             "  \"id\": 1,\n" +
-            "  \"name\": \"Vincent Buffey\",\n" +
+            "  \"name\": \"Julian Vasa\",\n" +
             "  \"balance\": 500.2,\n" +
             "  \"currency\": \"EUR\"\n" +
             "}")
@@ -168,9 +165,9 @@ public class TestMoneyTransfer {
     @Test
     public void addNewAccountWithIncorrectJSON() {
         given().body("{\n" +
-            "    \"name\": \"RNicolas LAnniel\",\n" +
+            "    \"name\": \"Julian Vasa\",\n" +
             "    \"balance\": \"12355\",\n" +
-            "    \"currency\": \"EUR\"\n" +
+            "    \"currency\": \"aaaa\"\n" +
             "}")
             .when()
             .post("/accounts")
@@ -197,7 +194,7 @@ public class TestMoneyTransfer {
     }
 
     @Test
-    public void getAllTransactions_PickOneAndGetTransactionDetails() {
+    public void getAllTransactions_Details() {
         final int id = get("/transactions").then()
             .assertThat()
             .body("size()", is(2))
@@ -209,7 +206,7 @@ public class TestMoneyTransfer {
             .assertThat()
             .statusCode(200)
             .body("id", equalTo(id))
-            .body("fromAccount", equalTo(3))
+            .body("fromAccount", equalTo(3333))
             .body("toAccount", equalTo(1))
             .body("amount", equalTo(34))
             .body("currency", equalTo("USD"))
@@ -227,7 +224,7 @@ public class TestMoneyTransfer {
 
     @Test
     public void getTransactionOfOneAccountThatDoesNotExist() {
-        get("/transactions/account/1").then()
+        get("/transactions/account/111111111").then()
             .assertThat()
             .statusCode(404);
     }
@@ -252,7 +249,7 @@ public class TestMoneyTransfer {
     @Test
     public void newTransaction() {
         given().body("{\n" +
-            "    \"fromAccount\": \"2\",\n" +
+            "    \"fromAccount\": \"2222\",\n" +
             "    \"toAccount\": \"1\",\n" +
             "    \"amount\": \"14.4\",\n" +
             "    \"currency\": \"USD\",\n" +
@@ -263,61 +260,6 @@ public class TestMoneyTransfer {
             .then()
             .assertThat()
             .statusCode(201);
-    }
-
-    @Test
-    public void newTransactionWithIncorrectJSON() {
-        given().body("{\n" +
-            "    \"fromAccount\": \"2\",\n" +
-            "    \"toAccount\": \"1\",\n" +
-            "    \"amount\": \"1000\",\n" +
-            "    \"currency\": \"USWD\",\n" +
-            "    \"description\": \"test transfer\"\n" +
-            "}")
-            .when()
-            .post("/transactions")
-            .then()
-            .assertThat()
-            .statusCode(415);
-    }
-
-    @Test
-    public void newTransactionWithNonNumericAccount() {
-        given().body("{\n" +
-            "    \"fromAccount\": \"asaadaasdasdasd\",\n" +
-            "    \"toAccount\": \"1\",\n" +
-            "    \"amount\": \"1000\",\n" +
-            "    \"currency\": \"USWD\",\n" +
-            "    \"description\": \"test transfer\"\n" +
-            "}")
-            .when()
-            .post("/transactions")
-            .then()
-            .assertThat()
-            .statusCode(415);
-    }
-
-    @Test
-    public void newTransactionWithIdAlreadyPresentInTheDB() {
-        final int id = get("/transactions").then()
-            .assertThat()
-            .statusCode(200)
-            .extract()
-            .jsonPath().getInt("find { it.amount==34 }.id");
-
-        given().body("{\n" +
-            "    \"id\": \"" + id + "\",\n" +
-            "    \"fromAccount\": \"2\",\n" +
-            "    \"toAccount\": \"1\",\n" +
-            "    \"amount\": \"14.4\",\n" +
-            "    \"currency\": \"USD\",\n" +
-            "    \"description\": \"test transfer\"\n" +
-            "}")
-            .when()
-            .post("/transactions")
-            .then()
-            .assertThat()
-            .statusCode(409);
     }
 
     @Test
@@ -339,7 +281,7 @@ public class TestMoneyTransfer {
     @Test
     public void newTransactionWithDestinationAccountThatDoesNotExist() {
         given().body("{\n" +
-            "    \"fromAccount\": \"1\",\n" +
+            "    \"fromAccount\": \"2222\",\n" +
             "    \"toAccount\": \"1231231312\",\n" +
             "    \"amount\": \"14.4\",\n" +
             "    \"currency\": \"USD\",\n" +
@@ -355,7 +297,7 @@ public class TestMoneyTransfer {
     @Test
     public void newTransactionWithoutTransactionAmount() {
         given().body("{\n" +
-            "    \"fromAccount\": \"2\",\n" +
+            "    \"fromAccount\": \"2222\",\n" +
             "    \"toAccount\": \"1\",\n" +
             "    \"currency\": \"USD\",\n" +
             "    \"description\": \"test transfer\"\n" +
@@ -370,7 +312,7 @@ public class TestMoneyTransfer {
     @Test
     public void newTransactionWithNegativeTransactionAmount() {
         given().body("{\n" +
-            "    \"fromAccount\": \"2\",\n" +
+            "    \"fromAccount\": \"2222\",\n" +
             "    \"toAccount\": \"1\",\n" +
             "    \"amount\": \"-14.4\",\n" +
             "    \"currency\": \"USD\",\n" +
@@ -386,7 +328,7 @@ public class TestMoneyTransfer {
     @Test
     public void newTransaction_InsufficientFunds() {
         given().body("{\n" +
-            "    \"fromAccount\": \"2\",\n" +
+            "    \"fromAccount\": \"2222\",\n" +
             "    \"toAccount\": \"1\",\n" +
             "    \"amount\": \"1000000000\",\n" +
             "    \"currency\": \"USD\",\n" +
@@ -398,6 +340,4 @@ public class TestMoneyTransfer {
             .assertThat()
             .statusCode(409);
     }
-
-
 }

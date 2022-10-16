@@ -97,16 +97,18 @@ public class TransactionsImpl implements Transactions {
             }
             BigDecimal amount = transaction.getAmount();
             if (amount == null || amount.compareTo(BigDecimal.ZERO) < 0) {
-                error(routingContext, 409, "Incorrenct transaction amount!");
+                error(routingContext, 409, "Incorrect transaction amount!");
             }
 
-            if (fromAccount != null && toAccount != null && amount!=null && amount.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal amountChange = ConvertCurrency.convertCurrency(routingContext, fromAccount.getCurrency().getCurrencyCode(), toAccount.getCurrency().getCurrencyCode(), amount.toString());
+
+            if (fromAccount != null && toAccount != null && amount!=null && amountChange != null) {
                 if (fromAccount.getBalance().compareTo(amount) < 0) {
-                    error(routingContext, 409, "Insufficient funds! Unable to process the transfer!");
+                    error(routingContext, 409, "Insufficient funds from account! Unable to process the transfer!");
                 }
 
                 fromAccount.withdraw(amount);
-                toAccount.deposit(amount);
+                toAccount.deposit(amountChange);
                 transaction.setStatus(TransactionStatus.SUCCESSFUL);
                 transactions.put(transaction.getId(), transaction);
                 sendTransactionResponse(routingContext, transaction, 201);
@@ -123,7 +125,6 @@ public class TransactionsImpl implements Transactions {
      */
     @Override
     public void getAllTransactions(RoutingContext routingContext, Map<Integer, Transaction> transactions) {
-        ConvertCurrency.convertCurrency(routingContext, "USD", "EUR", "5");
         routingContext.response()
             .putHeader(HttpHeaders.CONTENT_TYPE, JSON_CONTENT_TYPE)
             .setStatusCode(200)

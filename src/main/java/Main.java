@@ -25,54 +25,43 @@ public class Main extends AbstractVerticle{
     public void start(Promise<Void> startPromise) {
         insertSampleData();
 
-        /* Endpoints are exposed through a Router*/
+        /* Endpoints are exposed through a Router that will map a route to a handler which is basically the business code */
         Router router = Router.router(vertx);
+        /* Enables the reading of the request body for all routes under /accounts */
+        router.route("/accounts").handler(BodyHandler.create());
+        /* Enables the reading of the request body for all routes under /transactions */
+        router.route("/transactions").handler(BodyHandler.create());
 
-        /* Enables the reading of the request body for all routes under /accountsController */
-        router.route("/accountsController").handler(BodyHandler.create());
+        Accounts accountsHandler = new AccountsImpl();
+        Transactions transactionsHandler = new TransactionsImpl();
 
-        /* Enables the reading of the request body for all routes under /transactionsController */
-        router.route("/transactionsController").handler(BodyHandler.create());
-
-        Accounts accountsController = new AccountsImpl();
-        Transactions transactionsController = new TransactionsImpl();
-
-        /* Validate account number (id) */
-        router.route("/accountsController/:id").handler(accountsController::parseAccountNumber);
-
-        /* Get all accountsController */
-        router.get("/accountsController").handler(routingContext -> accountsController.getAllAccounts(routingContext, accounts));
-
+        /* Validate account number (id) before proceeding with any other endpoint which needs an id as a parameter */
+        router.route("/accounts/:id").handler(accountsHandler::parseAccountNumber);
+        /* Get all accounts */
+        router.get("/accounts").handler(routingContext -> accountsHandler.getAllAccounts(routingContext, accounts));
         /* Post a new account */
-        router.post("/accountsController").handler(routingContext -> accountsController.newAccount(routingContext, accounts));
-
+        router.post("/accounts").handler(routingContext -> accountsHandler.newAccount(routingContext, accounts));
         /* Get account by Id */
-        router.get("/accountsController/:id").handler(routingContext -> accountsController.getAccount(routingContext, accounts));
-
+        router.get("/accounts/:id").handler(routingContext -> accountsHandler.getAccount(routingContext, accounts));
         /* Delete an account */
-        router.delete("/accountsController/:id").handler(routingContext -> accountsController.deleteAccount(routingContext, accounts));
-
+        router.delete("/accounts/:id").handler(routingContext -> accountsHandler.deleteAccount(routingContext, accounts));
         /* Deposit or Withdraw */
-        router.put("/accountsController/:id/deposit/:amount").handler(
-                routingContext -> accountsController.accountOperation(routingContext, AccountOperation.DEPOSIT, accounts));
-        router.put("/accountsController/:id/withdraw/:amount").handler(
-                routingContext -> accountsController.accountOperation(routingContext, AccountOperation.WITHDRAW, accounts));
+        router.put("/accounts/:id/deposit/:amount").handler(
+                routingContext -> accountsHandler.accountOperation(routingContext, AccountOperation.DEPOSIT, accounts));
+        router.put("/accounts/:id/withdraw/:amount").handler(
+                routingContext -> accountsHandler.accountOperation(routingContext, AccountOperation.WITHDRAW, accounts));
 
-        /* Get all transactionsController */
-        router.get("/transactionsController").handler(routingContext -> transactionsController.getAllTransactions(routingContext,transactions));
-
+        /* Get all transactions */
+        router.get("/transactions").handler(routingContext -> transactionsHandler.getAllTransactions(routingContext,transactions));
         /* Post a new transaction */
-        router.post("/transactionsController").handler(routingContext -> transactionsController.newTransaction(routingContext,accounts,transactions));
-
+        router.post("/transactions").handler(routingContext -> transactionsHandler.newTransaction(routingContext,accounts,transactions));
         /* Get transaction by Id */
-        router.get("/transactionsController/:id").handler(routingContext -> transactionsController.getTransaction(routingContext,transactions));
+        router.get("/transactions/:id").handler(routingContext -> transactionsHandler.getTransaction(routingContext,transactions));
+        /* Get all transactions of a certain account identified with the provided Id */
+        router.get("/transactions/account/:id").handler(routingContext -> transactionsHandler.getTransactionOfAccount(routingContext,accounts,transactions));
 
-        /* Get all transactionsController of a certain account identified with the provided Id */
-        router.get("/transactionsController/account/:id").handler(routingContext -> transactionsController.getTransactionOfAccount(routingContext,accounts,transactions));
-
-        /* Check if server runs OK */
+        /* Just a simple endpoint to check whether the server is responding or not */
         router.get("/health").handler(rc -> rc.response().end("OK"));
-
         /* Start the HTTP server on port 8080 */
         vertx.createHttpServer()
                 .requestHandler(router)
@@ -113,8 +102,8 @@ public class Main extends AbstractVerticle{
         accounts.put(2, account2);
         accounts.put(3, account3);
 
-        Transaction transaction1 = new Transaction(2, 1, BigDecimal.valueOf(12), Currency.getInstance("EUR"));
-        Transaction transaction2 = new Transaction(3, 1, BigDecimal.valueOf(34), Currency.getInstance("USD"));
+        Transaction transaction1 = new Transaction(1, 1, BigDecimal.valueOf(12), Currency.getInstance("EUR"));
+        Transaction transaction2 = new Transaction(3333, 1, BigDecimal.valueOf(34), Currency.getInstance("USD"));
         transaction1.setStatus(TransactionStatus.SUCCESSFUL);
         transaction2.setStatus(TransactionStatus.SUCCESSFUL);
         transaction1.setDescription("test transaction 1");
